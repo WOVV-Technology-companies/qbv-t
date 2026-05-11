@@ -12,6 +12,8 @@
   const NETWORKS = [
     { id: "btc", name: "Bitcoin Native SegWit / BTC", coin: "BTC", path: "m/84'/0'/0'/0/{i}", kind: "bech32", hrp: "bc", sign: "btc" },
     { id: "btc_legacy", name: "Bitcoin Legacy / BTC", coin: "BTC", path: "m/44'/0'/0'/0/{i}", kind: "p2pkh", p2pkh: 0x00, wif: 0x80, sign: "btc" },
+    { id: "btc_testnet3", name: "Bitcoin Testnet3 Native SegWit / BTC", coin: "BTC", path: "m/84'/1'/0'/0/{i}", kind: "bech32", hrp: "tb", sign: "btc" },
+    { id: "btc_testnet4", name: "Bitcoin Testnet4 Native SegWit / BTC", coin: "BTC", path: "m/84'/1'/0'/0/{i}", kind: "bech32", hrp: "tb", sign: "btc" },
     { id: "eth", name: "Ethereum / ETH", coin: "ETH", path: "m/44'/60'/0'/0/{i}", kind: "evm", sign: "evm" },
     { id: "etc", name: "Ethereum Classic / ETC", coin: "ETC", path: "m/44'/61'/0'/0/{i}", kind: "evm", sign: "evm" },
     { id: "bsc", name: "BNB Smart Chain / BNB", coin: "BNB", path: "m/44'/60'/0'/0/{i}", kind: "evm", sign: "evm" },
