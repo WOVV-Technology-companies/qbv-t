@@ -202,6 +202,52 @@
     return node.key;
   }
 
+  async function deriveNode(seed, path, index) {
+    let node = await masterKeyFromSeed(seed);
+    for (const segment of parsePath(path, index)) node = await childKey(node, segment);
+    return node;
+  }
+
+  async function deriveWalletsFast(seed, network, firstIndex, total) {
+    if (!network.path.includes("{i}")) {
+      const rows = [];
+      for (let offset = 0; offset < total; offset += 1) {
+        const index = firstIndex + offset;
+        const privateKey = await derivePath(seed, network.path, index);
+        const publicKey = publicKeyFromPrivate(privateKey);
+        rows.push({
+          ...network,
+          index,
+          path: network.path.replace("{i}", String(index)),
+          address: await makeAddress(network, privateKey),
+          privateKeyHex: bytesToHex(privateKey),
+          publicKeyHex: bytesToHex(publicKey),
+          wif: network.kind === "evm" ? "" : await wif(network, privateKey),
+        });
+      }
+      return rows;
+    }
+    const basePath = network.path.split("/").slice(0, -1).join("/");
+    const baseNode = await deriveNode(seed, basePath || "m", 0);
+    const rows = [];
+    for (let offset = 0; offset < total; offset += 1) {
+      const index = firstIndex + offset;
+      const derived = await childKey(baseNode, index);
+      const privateKey = derived.key;
+      const publicKey = publicKeyFromPrivate(privateKey);
+      rows.push({
+        ...network,
+        index,
+        path: network.path.replace("{i}", String(index)),
+        address: await makeAddress(network, privateKey),
+        privateKeyHex: bytesToHex(privateKey),
+        publicKeyHex: bytesToHex(publicKey),
+        wif: network.kind === "evm" ? "" : await wif(network, privateKey),
+      });
+    }
+    return rows;
+  }
+
   const BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
   function base58(bytes) {
     let value = bytesToBigint(bytes);
@@ -390,6 +436,8 @@
     return words.join(" ");
   }
 
+  const seedCache = new Map();
+
   async function deriveWallets(mnemonicInput, passphrase, startIndex, networkId = "btc", count = 36) {
     const mnemonic = validateMnemonicShape(mnemonicInput);
     const firstIndex = Number.parseInt(startIndex, 10);
@@ -398,23 +446,13 @@
     if (!Number.isSafeInteger(total) || total < 1 || total > 36) throw new Error("每次最多显示 36 个地址");
     const network = NETWORKS.find((item) => item.id === networkId);
     if (!network) throw new Error("请选择支持的货币 / 网络");
-    const seed = await mnemonicToSeed(mnemonic, passphrase || "");
-    const rows = [];
-    for (let offset = 0; offset < total; offset += 1) {
-      const index = firstIndex + offset;
-      const privateKey = await derivePath(seed, network.path, index);
-      const publicKey = publicKeyFromPrivate(privateKey);
-      rows.push({
-        ...network,
-        index,
-        path: network.path.replace("{i}", String(index)),
-        address: await makeAddress(network, privateKey),
-        privateKeyHex: bytesToHex(privateKey),
-        publicKeyHex: bytesToHex(publicKey),
-        wif: network.kind === "evm" ? "" : await wif(network, privateKey),
-      });
+    const cacheKey = `${mnemonic}__${passphrase || ""}`;
+    let seed = seedCache.get(cacheKey);
+    if (!seed) {
+      seed = await mnemonicToSeed(mnemonic, passphrase || "");
+      seedCache.set(cacheKey, seed);
     }
-    return rows;
+    return deriveWalletsFast(seed, network, firstIndex, total);
   }
 
   async function signMessage(privateKeyHex, message, mode = "evm") {

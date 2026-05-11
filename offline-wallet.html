@@ -260,6 +260,10 @@ td code {
               <input id="accountIndex" type="number" min="0" max="1000000" value="0" />
             </label>
           </div>
+          <label style="flex-direction:row;align-items:center;gap:10px;font-weight:600;">
+            <input id="autoDerive" type="checkbox" style="width:auto;" />
+            切换网络/参数时自动生成
+          </label>
           <button type="submit">生成所选货币的 36 个地址 / 密钥</button>
         </form>
         <div id="deriveResults" class="table-wrap empty">尚未生成。默认选择 Bitcoin；请从下拉框选择其他货币 / 网络。</div>
@@ -405,6 +409,7 @@ const elements = {
   signForm: $("signForm"),
   signatureOutput: $("signatureOutput"),
   networkSelect: $("networkSelect"),
+  autoDerive: $("autoDerive"),
 };
 
 function toBase64(bytes) {
@@ -732,20 +737,38 @@ async function importBackup(event) {
   }
 }
 
+let deriveToken = 0;
+
+function shouldAutoDerive() {
+  return !!elements.autoDerive?.checked;
+}
+
+function scheduleAutoDerive() {
+  if (!shouldAutoDerive()) return;
+  const mnemonic = $("mnemonicInput").value.trim();
+  if (!mnemonic) return;
+  Promise.resolve().then(() => deriveFromMnemonic());
+}
+
 async function deriveFromMnemonic(event) {
-  event.preventDefault();
+  if (event) event.preventDefault();
   const button = elements.deriveForm.querySelector('button[type="submit"]');
+  const token = ++deriveToken;
   button.disabled = true;
   button.textContent = "生成中…";
   try {
     const rows = await walletCore.deriveWallets($("mnemonicInput").value, $("mnemonicPassphrase").value, $("accountIndex").value, $("networkSelect").value, 36);
+    if (token !== deriveToken) return;
     renderDerivationResults(rows);
     notify("已生成所选货币 / 网络的 36 个地址和密钥");
   } catch (error) {
+    if (token !== deriveToken) return;
     notify(error.message || "派生失败");
   } finally {
-    button.disabled = false;
-    button.textContent = "生成所选货币的 36 个地址 / 密钥";
+    if (token === deriveToken) {
+      button.disabled = false;
+      button.textContent = "生成所选货币的 36 个地址 / 密钥";
+    }
   }
 }
 
@@ -826,6 +849,11 @@ function bindEvents() {
   elements.importFile.addEventListener("change", importBackup);
   elements.deriveForm.addEventListener("submit", deriveFromMnemonic);
   elements.deriveResults.addEventListener("click", handleDerivationAction);
+  ["networkSelect", "mnemonicInput", "mnemonicPassphrase", "accountIndex"].forEach((id) => {
+    $(id).addEventListener("change", scheduleAutoDerive);
+    $(id).addEventListener("input", scheduleAutoDerive);
+  });
+  elements.autoDerive.addEventListener("change", scheduleAutoDerive);
   elements.signForm.addEventListener("submit", signOfflineMessage);
   window.addEventListener("online", updateNetworkStatus);
   window.addEventListener("offline", updateNetworkStatus);
